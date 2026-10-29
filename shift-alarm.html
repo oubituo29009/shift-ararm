@@ -317,6 +317,11 @@
   }
   .text-input.mini::placeholder{ color:#5a6878; }
   .mini-label{ margin-top:14px; font-size:11.5px; color:var(--muted); letter-spacing:.04em; }
+  .voice-select{
+    width:100%; margin-top:8px; padding:11px 12px; border-radius:11px; font-family:inherit;
+    font-size:13.5px; color:#dbe4ee; background:rgba(255,255,255,.05);
+    border:1px solid var(--line); appearance:none; -webkit-appearance:none;
+  }
   .brief{
     width:100%; max-width:360px; margin-top:22px; padding:14px 16px; border-radius:16px;
     background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09); text-align:left;
@@ -507,7 +512,7 @@ function seedState() {
       brief: {
         on: true, weather: true, shift: true, news: false,
         city: '', lat: null, lon: null, place: '',
-        note: '', rss: ''
+        note: '', rss: '', source: 'cctv', voice: ''
       }
     },
     snoozed: []
@@ -521,6 +526,7 @@ function normalize(s) {
   if (typeof st.settings.sound !== 'string' || !st.settings.sound) st.settings.sound = 'chime';
   st.settings.fade = [0, 15, 30, 60].includes(Number(st.settings.fade)) ? Number(st.settings.fade) : 30;
   st.settings.brief = Object.assign({}, base.settings.brief, st.settings.brief || {});
+  if (!['cctv', 'sina', 'custom'].includes(st.settings.brief.source)) st.settings.brief.source = 'cctv';
   st.groups = Array.isArray(st.groups) ? st.groups : [];
   st.snoozed = Array.isArray(st.snoozed) ? st.snoozed : [];
   st.groups.forEach(g => {
@@ -929,6 +935,9 @@ function settingsSheetHTML() {
 
   const cur = currentSoundId();
   const b = state.settings.brief;
+  const srcNow = b.source || 'cctv';
+  const voices = getZhVoices();
+  const voiceOpts = voices.map(v => `<option value="${esc(v.voiceURI)}"${b.voice === v.voiceURI ? ' selected' : ''}>${esc(v.name)}（${esc(v.lang)}）</option>`).join('');
   const curItem = cur.indexOf('custom:') === 0 ? findCustom(cur.slice(7)) : null;
   const curBuiltin = BUILTIN_SOUNDS.find(s => s.id === cur) || BUILTIN_SOUNDS[0];
   const soundName = curItem ? curItem.name : curBuiltin.name;
@@ -962,7 +971,7 @@ function settingsSheetHTML() {
       ${customList}
       <button class="btn ghost block" data-action="upload-sound">＋ 上传自定义铃声</button>
       <input type="file" id="sound-file" accept="audio/*">
-      <p class="hint" style="margin:10px 0 0">手机里的 mp3 / m4a / wav 都能用，会保存在本机浏览器里，不上传。</p>
+      <p class="hint" style="margin:10px 0 0">mp3 / m4a / wav 都能用，单个文件最大 200MB。存在本机浏览器里，不上传。</p>
     </div>
 
     <div class="field">
@@ -992,11 +1001,20 @@ function settingsSheetHTML() {
       <p class="hint" style="margin:6px 0 0">${b.place ? '已定位：' + esc(b.place) : '填城市名，回车后自动查坐标'}</p>
       <div class="mini-label">想听的一句话</div>
       <input class="text-input mini" placeholder="比如 记得带工牌" data-field="brief-note" value="${esc(b.note)}" maxlength="30">
-      <div class="mini-label">新闻 RSS 地址</div>
-      <input class="text-input mini" placeholder="https://36kr.com/feed" data-field="brief-rss" value="${esc(b.rss)}">
+      <div class="mini-label">新闻来源</div>
+      <div class="sounds" style="margin-top:8px">
+        ${NEWS_SOURCES.map(s => `<button class="sound-chip" data-action="pick-news" data-src="${s.id}" aria-pressed="${srcNow === s.id}">${s.label}</button>`).join('')}
+      </div>
+      ${srcNow === 'custom' ? `<input class="text-input mini" placeholder="填一个允许跨域的 RSS 地址" data-field="brief-rss" value="${esc(b.rss)}">` : ''}
+      <div class="mini-label">播报声音</div>
+      <select class="voice-select" data-field="brief-voice">
+        <option value=""${b.voice ? '' : ' selected'}>自动（优先女声）</option>
+        ${voiceOpts}
+      </select>
+      <p class="hint" style="margin:8px 0 0">${srcNow === 'cctv' ? '先读央视网首页标题，抓不到自动改用新浪要闻。' : srcNow === 'sina' ? '读新浪要闻的 RSS。' : '自定义源需要对方允许跨域访问。'}</p>
       <button class="btn ghost block" style="margin-top:14px" data-action="test-brief">🔊 试听播报</button>
       ` : ''}
-      <p class="hint" style="margin:10px 0 0">播报用手机自带语音朗读；天气来自 open-meteo，新闻读你填的 RSS。</p>
+      <p class="hint" style="margin:10px 0 0">播报用手机自带语音朗读；天气来自 open-meteo，新闻按上面选的来源。</p>
     </div>
 
     <div class="field">
@@ -1244,6 +1262,13 @@ document.addEventListener('click', e => {
     case 'test-brief': testBrief(); break;
     case 'speak-brief': if (ringing && ringing.brief) speak(ringing.brief); break;
 
+    case 'pick-news': {
+      state.settings.brief.source = el.dataset.src;
+      save();
+      rerenderSheet();
+      break;
+    }
+
     case 'upload-sound': {
       const input = $('#sound-file');
       if (input) input.click();
@@ -1358,6 +1383,11 @@ document.addEventListener('change', e => {
   }
   if (el.dataset.field === 'brief-city') {
     geocodeCity(el.value);
+    return;
+  }
+  if (el.dataset.field === 'brief-voice') {
+    state.settings.brief.voice = el.value;
+    save();
     return;
   }
   if (el.dataset.field === 'brief-weather' || el.dataset.field === 'brief-shift' || el.dataset.field === 'brief-news') {
@@ -1649,15 +1679,31 @@ function fmtSize(n) {
   return (n / 1024 / 1024).toFixed(1) + ' MB';
 }
 
+const MAX_SOUND_BYTES = 200 * 1024 * 1024; // 单个铃声最大 200MB
+
 async function onSoundFile(file) {
   if (!file) return;
-  if (file.size > 8 * 1024 * 1024) { toast('文件太大，请控制在 8MB 以内'); return; }
+  if (file.size > MAX_SOUND_BYTES) { toast('文件太大，单个铃声上限 200MB'); return; }
+  if (file.size === 0) { toast('这个文件是空的'); return; }
+
+  // 先看看浏览器给不给地方存
+  if (navigator.storage && navigator.storage.estimate) {
+    try {
+      const est = await navigator.storage.estimate();
+      if (est.quota && (est.quota - est.usage) < file.size * 1.1) {
+        toast('本机剩余空间不够放下这个音频');
+        return;
+      }
+    } catch (e) {}
+  }
+
   const name = (file.name || '我的铃声').replace(/\.[^.]+$/, '').slice(0, 16) || '我的铃声';
   const rec = { id: uid(), name, size: file.size, blob: file };
+  toast('正在保存 ' + fmtSize(file.size) + '…');
   try {
     await putSound(rec);
   } catch (e) {
-    toast('这个浏览器存不了音频文件');
+    toast('保存失败：空间不足或被浏览器拒绝');
     return;
   }
   customSounds.push({ id: rec.id, name, size: rec.size, url: URL.createObjectURL(file) });
@@ -1753,22 +1799,101 @@ async function getWeatherText() {
   }
 }
 
+const NEWS_SOURCES = [
+  { id: 'cctv', label: '央视新闻' },
+  { id: 'sina', label: '新浪要闻' },
+  { id: 'custom', label: '自定义 RSS' }
+];
+
+/** 依次尝试：直连 → 两个公共 CORS 代理 */
+const PROXIES = [
+  u => u,
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u)
+];
+
+async function fetchTextAny(url, ms) {
+  for (const wrap of PROXIES) {
+    try {
+      const r = await fetchWithTimeout(wrap(url), ms || 6000);
+      if (!r.ok) continue;
+      const t = await r.text();
+      if (t && t.length > 200) return t;
+    } catch (e) { /* 换下一个 */ }
+  }
+  return '';
+}
+
+/** 把标题洗干净，并压到一句话的长度 */
+function cleanHeadline(s) {
+  return String(s || '')
+    .replace(/<!\[CDATA\[|\]\]>/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;|&amp;|&quot;|&#39;|&lt;|&gt;/g, ' ')
+    .replace(/^[【\[（(][^】\]）)]{0,10}[】\]）)]\s*/, '')
+    .replace(/\s*[-|·—_]\s*[^-|·—_]{2,14}$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function pickHeadlines(list, n) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of list) {
+    const t = cleanHeadline(raw);
+    if (t.length < 6) continue;
+    if (/^(更多|首页|新闻|视频|直播|登录|注册|客户端|网站地图|关于我们|下一页)$/.test(t)) continue;
+    if (!/[\u4e00-\u9fa5A-Za-z]/.test(t)) continue;
+    const key = t.slice(0, 6);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t.length > 30 ? t.slice(0, 30) : t);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+function parseRssTitles(text) {
+  try {
+    const doc = new DOMParser().parseFromString(text, 'text/xml');
+    if (doc.querySelector('parsererror')) return [];
+    return [...doc.querySelectorAll('item > title, entry > title')].map(n => n.textContent || '');
+  } catch (e) { return []; }
+}
+
+function parseCctvHtml(html) {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const out = [];
+    doc.querySelectorAll('a').forEach(a => {
+      const t = (a.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t.length >= 8 && t.length <= 46) out.push(t);
+    });
+    return out;
+  } catch (e) { return []; }
+}
+
+/** 先央视，抓不到就退回新浪，只留 3 条最像新闻的 */
 async function getNewsLines() {
   const b = state.settings.brief;
-  if (!b.rss) return [];
-  try {
-    const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(b.rss);
-    const r = await fetchWithTimeout(url, 7000);
-    const text = await r.text();
-    const doc = new DOMParser().parseFromString(text, 'text/xml');
-    const items = [...doc.querySelectorAll('item > title, entry > title')].slice(0, 3);
-    return items
-      .map(n => (n.textContent || '').trim().replace(/<[^>]+>/g, ''))
-      .filter(Boolean)
-      .map(s => s.length > 34 ? s.slice(0, 34) + '…' : s);
-  } catch (e) {
-    return [];
+  let src = b.source || 'cctv';
+  let lines = [];
+
+  if (src === 'cctv') {
+    const html = await fetchTextAny('https://news.cctv.com/', 6500);
+    if (html) lines = pickHeadlines(parseCctvHtml(html), 3);
+    if (lines.length < 2) src = 'sina';
   }
+  if (src === 'sina') {
+    const xml = await fetchTextAny('https://rss.sina.com.cn/news/china/focus15.xml', 6000);
+    if (xml) lines = pickHeadlines(parseRssTitles(xml), 3);
+  }
+  if (src === 'custom') {
+    if (!b.rss) return [];
+    const xml = await fetchTextAny(b.rss, 7000);
+    if (xml) lines = pickHeadlines(parseRssTitles(xml), 3);
+  }
+  return lines;
 }
 
 async function buildBrief() {
@@ -1794,12 +1919,36 @@ async function buildBrief() {
   return parts.join('');
 }
 
+function getZhVoices() {
+  try {
+    return (speechSynthesis.getVoices() || []).filter(v =>
+      /zh|cmn|Chinese|中文|普通话/i.test((v.lang || '') + ' ' + (v.name || '')));
+  } catch (e) { return []; }
+}
+
+/** 网页里选不了 Siri 的音色，只能在系统给出的中文语音里挑最像女声的那个 */
+const FEMALE_HINT = /tingting|婷婷|meijia|美佳|xiaoxiao|晓晓|huihui|慧慧|yaoyao|瑶瑶|小艺|female|女/i;
+
+function pickVoice() {
+  const vs = getZhVoices();
+  if (!vs.length) return null;
+  const saved = state.settings.brief.voice;
+  if (saved) {
+    const hit = vs.find(v => v.voiceURI === saved || v.name === saved);
+    if (hit) return hit;
+  }
+  return vs.find(v => FEMALE_HINT.test(v.name || ''))
+    || vs.find(v => /zh[-_]CN|cmn-Hans/i.test(v.lang || ''))
+    || vs[0];
+}
+
 function speak(text) {
   if (!text || !('speechSynthesis' in window)) return false;
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'zh-CN';
+    const v = pickVoice();
+    if (v) { u.voice = v; u.lang = v.lang || 'zh-CN'; } else { u.lang = 'zh-CN'; }
     u.rate = 1;
     u.pitch = 1;
     speechSynthesis.speak(u);
@@ -2022,6 +2171,13 @@ function tick() {
   if ('serviceWorker' in navigator
     && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  // 语音列表是异步加载的（iOS 上尤其慢），加载完刷新一次设置页
+  if ('speechSynthesis' in window) {
+    const refreshVoices = () => { if (view.sheet === 'settings') rerenderSheet(); };
+    speechSynthesis.addEventListener('voiceschanged', refreshVoices);
+    setTimeout(refreshVoices, 1200);
   }
 
   // iPhone 添加到主屏幕的引导（只提示一次）

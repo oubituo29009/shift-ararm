@@ -1,0 +1,2049 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e13">
+<meta name="format-detection" content="telephone=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="班次闹钟">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏰</text></svg>">
+<title>班次闹钟 · 早晚班轮换专用</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root{
+    --bg:#0a0e13;
+    --card:#151d27;
+    --card2:#1b2531;
+    --line:rgba(255,255,255,.085);
+    --txt:#eef3f8;
+    --muted:#8b9aab;
+    --accent:#ff8a3d;
+    --danger:#ff5f6d;
+    --r:20px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+  }
+  [hidden]{ display:none !important; }
+  html, body { height:100%; }
+  html { -webkit-text-size-adjust:100%; }
+  body{
+    margin:0;
+    overflow-x:hidden;
+    background: radial-gradient(130% 70% at 50% -10%, #17222f 0%, #0a0e13 58%) no-repeat, var(--bg);
+    background-attachment: fixed;
+    color:var(--txt);
+    font-family:-apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    font-variant-numeric: tabular-nums;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body.locked{ overflow:hidden; }
+
+  /* ---------- shell ---------- */
+  .phone{
+    max-width:520px;
+    margin:0 auto;
+    padding: calc(var(--safe-t) + 12px) 16px calc(40px + var(--safe-b));
+  }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:4px 2px 14px; }
+  .brand{ display:flex; align-items:center; gap:9px; font-size:16px; font-weight:700; letter-spacing:.02em; }
+  .brand .logo{
+    width:30px; height:30px; border-radius:10px; display:grid; place-items:center; font-size:15px;
+    background:linear-gradient(160deg,#ff9f5a,#ff6b35); box-shadow:0 6px 18px rgba(255,122,53,.32);
+  }
+  .icon-btn{
+    appearance:none; border:1px solid var(--line); background:rgba(255,255,255,.045); color:var(--txt);
+    width:40px; height:40px; border-radius:13px; font-size:17px; display:grid; place-items:center;
+    cursor:pointer; transition:background .18s, transform .12s;
+  }
+  .icon-btn:active{ transform:scale(.94); }
+  .icon-btn.danger{ color:var(--danger); border-color:rgba(255,95,109,.28); background:rgba(255,95,109,.08); width:auto; padding:0 14px; font-size:14px; }
+  .top-actions{ display:flex; gap:8px; }
+
+  /* ---------- 守夜模式 ---------- */
+  .night{
+    position:fixed; inset:0; z-index:80; background:#000; color:#dfe7ef;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    padding:calc(var(--safe-t) + 18px) 22px calc(var(--safe-b) + 24px); text-align:center;
+    animation:nightIn .3s ease;
+  }
+  .night[hidden]{ display:none !important; }
+  @keyframes nightIn{ from{ opacity:0 } to{ opacity:1 } }
+  .night-clock{ display:flex; align-items:baseline; font-weight:200; font-size:clamp(72px, 27vw, 132px); line-height:1; letter-spacing:-.03em; color:#e6edf5; }
+  .night-sec{ font-size:.22em; font-weight:400; color:#4c5a6b; margin-left:.1em; letter-spacing:0; }
+  .night-date{ font-size:13px; color:#5f6d7e; letter-spacing:.02em; }
+  .night-count{ margin-top:22px; font-size:15px; color:#7d8b9b; letter-spacing:.06em; }
+  .night-count b{ color:#c8d4e1; font-weight:600; font-size:17px; }
+  .night-warn{ color:#ffb26b; }
+  .night-next{ margin-top:8px; font-size:14.5px; line-height:1.7; color:#93a2b3; }
+  .night-next b{ color:#d7e2ee; font-weight:600; }
+  .night-foot{ position:absolute; left:0; right:0; bottom:calc(var(--safe-b) + 26px); font-size:11.5px; line-height:1.8; color:#46525f; }
+  .night-foot p{ margin:0; }
+  .night-dim{ color:#333d48; }
+  .night-top{ position:absolute; top:calc(var(--safe-t) + 14px); left:18px; right:18px; display:flex; align-items:center; justify-content:space-between; }
+  .night-label{ font-size:11px; letter-spacing:.34em; text-indent:.34em; color:#4d5a68; }
+  .night-exit{ appearance:none; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); color:#7d8b9b; border-radius:999px; padding:7px 14px; font-size:12px; font-family:inherit; cursor:pointer; }
+
+  /* ---------- iOS 安装提示 ---------- */
+  .ios-tip{
+    position:fixed; z-index:70; left:12px; right:12px; bottom:calc(12px + var(--safe-b));
+    max-width:496px; margin:0 auto; display:flex; gap:12px; align-items:flex-start;
+    padding:14px 14px 14px 16px; border-radius:18px;
+    background:rgba(28,38,50,.96); border:1px solid var(--line);
+    box-shadow:0 18px 40px rgba(0,0,0,.5); animation:tipIn .28s ease;
+  }
+  .ios-tip[hidden]{ display:none !important; }
+  @keyframes tipIn{ from{ transform:translateY(14px); opacity:0 } to{ transform:translateY(0); opacity:1 } }
+  .ios-tip-body{ flex:1; }
+  .ios-tip-body b{ font-size:14px; }
+  .ios-tip-body p{ margin:5px 0 0; font-size:12.5px; line-height:1.6; color:var(--muted); }
+  .ios-tip-close{ appearance:none; border:0; background:rgba(255,255,255,.07); color:#9aa8b7; width:26px; height:26px; border-radius:9px; font-size:12px; cursor:pointer; flex:none; }
+
+  /* ---------- hero ---------- */
+  .hero{
+    position:relative; overflow:hidden;
+    border-radius:26px; padding:22px 20px 18px;
+    background:
+      radial-gradient(120% 120% at 85% -20%, rgba(255,138,61,.20), transparent 60%),
+      linear-gradient(180deg, #1a2431 0%, #121922 100%);
+    border:1px solid var(--line);
+    box-shadow:0 18px 40px -28px rgba(0,0,0,.9);
+  }
+  .hero-clock{ display:flex; align-items:baseline; gap:2px; font-size:54px; font-weight:800; letter-spacing:-.02em; line-height:1; }
+  .hero-clock .sec{ font-size:19px; font-weight:600; color:var(--muted); letter-spacing:0; margin-left:3px; }
+  .hero-date{ margin-top:8px; font-size:13.5px; color:var(--muted); letter-spacing:.02em; }
+  .hero-today{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .hero-next{
+    margin-top:14px; padding-top:13px; border-top:1px dashed rgba(255,255,255,.10);
+    font-size:13px; color:#c7d3e0; display:flex; align-items:center; gap:8px; line-height:1.45;
+  }
+  .hero-next b{ color:var(--txt); font-weight:700; }
+  .pulse-dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none; box-shadow:0 0 0 0 rgba(255,138,61,.55); animation:dotPulse 2.4s infinite; }
+  @keyframes dotPulse{ 0%{box-shadow:0 0 0 0 rgba(255,138,61,.5)} 70%{box-shadow:0 0 0 8px rgba(255,138,61,0)} 100%{box-shadow:0 0 0 0 rgba(255,138,61,0)} }
+
+  /* ---------- section head ---------- */
+  .sec-head{ display:flex; align-items:flex-end; justify-content:space-between; margin:26px 4px 12px; }
+  .sec-title{ font-size:15px; font-weight:700; letter-spacing:.02em; }
+  .sec-sub{ font-size:12px; color:var(--muted); }
+
+  /* ---------- group card ---------- */
+  .groups{ display:flex; flex-direction:column; gap:12px; }
+  .gcard{
+    position:relative; overflow:hidden; cursor:pointer;
+    border-radius:var(--r); padding:16px 16px 14px 22px;
+    background:linear-gradient(180deg, var(--card2) 0%, var(--card) 100%);
+    border:1px solid var(--line);
+    transition:transform .14s ease, border-color .2s ease, opacity .2s ease;
+  }
+  .gcard::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--accent); }
+  .gcard:active{ transform:scale(.987); }
+  .gcard.off{ opacity:.55; }
+  .ghead{ display:flex; align-items:center; gap:10px; }
+  .gname{ font-size:18px; font-weight:750; letter-spacing:.01em; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .gmeta{ margin-top:5px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+  .badge{ font-size:11px; padding:2px 7px; border-radius:999px; background:rgba(74,222,128,.14); color:#6ee7a0; border:1px solid rgba(74,222,128,.22); }
+  .badge.warn{ background:rgba(255,180,60,.12); color:#ffc46b; border-color:rgba(255,180,60,.25); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:11px; }
+  .chip{
+    font-size:12.5px; color:#cdd8e4; background:rgba(255,255,255,.055);
+    border:1px solid var(--line); border-radius:9px; padding:4px 8px; white-space:nowrap;
+  }
+  .chip.dim{ opacity:.42; text-decoration:line-through; }
+  .chip.more{ color:var(--muted); background:transparent; border-style:dashed; }
+  .gnext{ margin-top:11px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+
+  /* ---------- switch ---------- */
+  .switch{
+    appearance:none; -webkit-appearance:none; position:relative; flex:none;
+    width:48px; height:28px; border-radius:999px; border:0; padding:0; cursor:pointer;
+    background:#2b3543; transition:background .2s ease;
+  }
+  .switch::after{
+    content:''; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%;
+    background:#fff; box-shadow:0 2px 5px rgba(0,0,0,.35); transition:transform .2s cubic-bezier(.22,.8,.3,1);
+  }
+  .switch[aria-checked="true"]{ background:var(--accent); }
+  .switch[aria-checked="true"]::after{ transform:translateX(20px); }
+  .switch.sm{ width:42px; height:25px; }
+  .switch.sm::after{ width:19px; height:19px; }
+  .switch.sm[aria-checked="true"]::after{ transform:translateX(17px); }
+
+  /* ---------- add group tile ---------- */
+  .add-group-tile{
+    width:100%; padding:19px; border-radius:18px; cursor:pointer; font-family:inherit; font-size:14px;
+    border:1px dashed rgba(255,255,255,.18); background:rgba(255,255,255,.022); color:#9fb0c2;
+    transition:background .18s, color .18s;
+  }
+  .add-group-tile:active{ background:rgba(255,255,255,.07); color:var(--txt); }
+
+  /* ---------- empty ---------- */
+  .empty{ text-align:center; padding:38px 18px; border:1px dashed var(--line); border-radius:22px; background:rgba(255,255,255,.02); }
+  .empty .emoji{ font-size:34px; }
+  .empty h2{ margin:12px 0 6px; font-size:17px; }
+  .empty p{ margin:0 auto 18px; max-width:300px; font-size:13px; line-height:1.6; color:var(--muted); }
+
+  /* ---------- sheet ---------- */
+  .sheet{
+    position:fixed; inset:0; z-index:50; overflow-y:auto; overscroll-behavior:contain;
+    background:var(--bg);
+    transform:translateY(100%); visibility:hidden;
+    transition:transform .3s cubic-bezier(.22,.8,.3,1), visibility .3s;
+    -webkit-overflow-scrolling:touch;
+  }
+  .sheet.open{ transform:translateY(0); visibility:visible; }
+  .sheet-inner{ max-width:520px; margin:0 auto; padding:calc(var(--safe-t) + 8px) 16px calc(60px + var(--safe-b)); }
+  .sheet-bar{ display:flex; align-items:center; gap:10px; padding:6px 0 16px; position:sticky; top:0; z-index:3;
+    background:linear-gradient(180deg, #0a0e13 74%, rgba(10,14,19,0));
+    -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
+  .sheet-title{ flex:1; font-size:16px; font-weight:700; }
+
+  .field{ margin-bottom:18px; padding:16px; border-radius:18px; background:rgba(255,255,255,.035); border:1px solid var(--line); }
+  .field > label, .field-head label{ display:block; font-size:12.5px; color:var(--muted); letter-spacing:.03em; margin-bottom:10px; }
+  .field-head{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+  .field-head label{ margin-bottom:10px; }
+  .hint{ font-size:11.5px; color:var(--muted); }
+  .hint.warn{ color:#ffb45c; }
+
+  .text-input{
+    width:100%; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--txt);
+    font-size:20px; font-weight:650; padding:4px 0 9px; font-family:inherit; letter-spacing:.01em;
+  }
+  .text-input:focus{ outline:0; border-bottom-color:var(--accent); }
+
+  .swatches{ display:flex; gap:6px; flex-wrap:wrap; margin-top:16px; }
+  .swatch{ width:30px; height:30px; border-radius:10px; border:2px solid transparent; cursor:pointer; padding:0; transition:transform .14s; }
+  .swatch:active{ transform:scale(.9); }
+  .swatch[aria-pressed="true"]{ border-color:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.1); }
+
+  .presets{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }
+  .preset{
+    appearance:none; border:1px solid var(--line); background:rgba(255,255,255,.04); color:#c9d5e2;
+    font-size:12px; padding:6px 10px; border-radius:9px; cursor:pointer; font-family:inherit;
+  }
+  .preset:active{ background:rgba(255,255,255,.1); }
+  .preset[data-preset="none"]{ color:var(--muted); }
+
+  .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .day{
+    appearance:none; aspect-ratio:1/1; border-radius:11px; border:1px solid var(--line);
+    background:rgba(255,255,255,.035); color:#a7b5c4; font-size:13.5px; font-weight:600;
+    display:grid; place-items:center; cursor:pointer; padding:0; font-family:inherit;
+    transition:background .15s, color .15s, transform .12s;
+  }
+  .day:active{ transform:scale(.92); }
+  .day[aria-pressed="true"]{ background:var(--accent); border-color:transparent; color:#11161d; font-weight:800; }
+
+  .check{ display:flex; align-items:flex-start; gap:9px; margin-top:14px; font-size:12.5px; color:var(--muted); line-height:1.5; cursor:pointer; }
+  .check input{ appearance:none; -webkit-appearance:none; width:19px; height:19px; border-radius:6px; border:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.04); margin:0; flex:none; position:relative; cursor:pointer; }
+  .check input:checked{ background:var(--accent); border-color:transparent; }
+  .check input:checked::after{ content:''; position:absolute; left:6px; top:2.5px; width:5px; height:10px; border:solid #11161d; border-width:0 2px 2px 0; transform:rotate(45deg); }
+
+  .alarm{
+    display:flex; align-items:center; gap:10px; padding:9px 12px; margin-bottom:8px;
+    border-radius:14px; background:rgba(255,255,255,.045); border:1px solid var(--line);
+    transition:opacity .2s;
+  }
+  .alarm.off{ opacity:.42; }
+  .alarm input[type="time"]{
+    appearance:none; background:transparent; border:0; padding:0; color:var(--txt);
+    font-family:inherit; font-size:26px; font-weight:750; letter-spacing:.01em; width:124px; flex:none;
+    font-variant-numeric:tabular-nums;
+  }
+  .alarm input[type="time"]:focus{ outline:0; }
+  .alarm input[type="time"]::-webkit-calendar-picker-indicator{ filter:invert(.55); opacity:.5; cursor:pointer; width:17px; height:17px; padding:0; margin-left:4px; }
+  .alarm input[type="time"]::-webkit-datetime-edit{ padding:0; }
+  .alarm input[type="text"]{
+    flex:1; min-width:0; background:transparent; border:0; border-bottom:1px dashed transparent;
+    color:var(--muted); font-family:inherit; font-size:13.5px; text-align:right; padding:4px 0;
+  }
+  .alarm input[type="text"]:focus{ outline:0; border-bottom-color:var(--accent); color:var(--txt); }
+  .del{
+    appearance:none; border:0; background:transparent; color:rgba(255,255,255,.28);
+    width:30px; height:30px; border-radius:9px; font-size:15px; cursor:pointer; flex:none;
+  }
+  .del:active{ background:rgba(255,95,109,.14); color:var(--danger); }
+  .add-alarm{
+    width:100%; margin-top:4px; padding:12px; border-radius:13px; cursor:pointer; font-family:inherit;
+    background:rgba(255,255,255,.03); border:1px dashed rgba(255,255,255,.16); color:#b9c6d4; font-size:13.5px;
+  }
+  .add-alarm:active{ background:rgba(255,255,255,.08); }
+
+  .seg{ display:flex; gap:6px; }
+  .seg button{
+    flex:1; padding:10px 0; border-radius:11px; cursor:pointer; font-family:inherit; font-size:13.5px;
+    background:rgba(255,255,255,.04); border:1px solid var(--line); color:#a7b5c4;
+  }
+  .seg button[aria-pressed="true"]{ background:var(--accent); border-color:transparent; color:#11161d; font-weight:750; }
+
+  /* ---------- 铃声选择 ---------- */
+  .sounds{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }
+  .sound-chip{
+    appearance:none; border:1px solid var(--line); background:rgba(255,255,255,.04); color:#c9d5e2;
+    font-size:12.5px; padding:8px 12px; border-radius:10px; cursor:pointer; font-family:inherit;
+    transition:background .15s, color .15s;
+  }
+  .sound-chip:active{ background:rgba(255,255,255,.1); }
+  .sound-chip[aria-pressed="true"]{ background:var(--accent); border-color:transparent; color:#11161d; font-weight:700; }
+  .custom-sounds{ display:flex; flex-direction:column; gap:7px; margin-bottom:12px; }
+  .sound-item{ display:flex; align-items:center; gap:6px; }
+  .sound-item-main{
+    flex:1; min-width:0; display:flex; align-items:center; gap:8px; text-align:left;
+    background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:11px; padding:10px 12px;
+    color:#c9d5e2; font-family:inherit; font-size:13px; cursor:pointer;
+  }
+  .sound-item-main[aria-pressed="true"]{ border-color:var(--accent); color:var(--txt); background:rgba(255,138,61,.09); }
+  .sound-item-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sound-item-size{ font-size:11px; color:var(--muted); flex:none; }
+  .sound-mini{
+    appearance:none; flex:none; background:rgba(255,255,255,.05); border:1px solid var(--line); color:#9fb0c2;
+    border-radius:9px; padding:9px 10px; font-size:12px; font-family:inherit; cursor:pointer;
+  }
+  .sound-mini:active{ background:rgba(255,255,255,.12); }
+  .sound-mini.danger{ color:#ff8b94; }
+  #sound-file{ display:none; }
+
+  /* ---------- 晨间播报 ---------- */
+  .row-toggle{ display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:14px; color:#dbe4ee; padding:2px 0 12px; }
+  .brief-opts{ display:flex; flex-wrap:wrap; gap:8px 16px; margin:0 0 10px; }
+  .brief-opts .check{ margin-top:0; font-size:13px; color:#c3cfdb; }
+  .text-input.mini{
+    font-size:14px; font-weight:500; padding:10px 0 8px; margin-top:6px;
+    border-bottom:1px solid var(--line);
+  }
+  .text-input.mini::placeholder{ color:#5a6878; }
+  .mini-label{ margin-top:14px; font-size:11.5px; color:var(--muted); letter-spacing:.04em; }
+  .brief{
+    width:100%; max-width:360px; margin-top:22px; padding:14px 16px; border-radius:16px;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09); text-align:left;
+    max-height:34vh; overflow-y:auto;
+  }
+  .brief-kicker{ font-size:10.5px; letter-spacing:.28em; color:#8b98a7; text-transform:uppercase; }
+  .brief-text{ margin-top:8px; font-size:13.5px; line-height:1.75; color:#d6e0ea; }
+  .brief-play{
+    margin-top:10px; background:transparent; border:1px solid rgba(255,255,255,.14); color:#b9c6d4;
+    border-radius:9px; padding:6px 10px; font-size:12px; font-family:inherit; cursor:pointer;
+  }
+
+  .note{ font-size:12px; line-height:1.65; color:var(--muted); padding:14px 16px; border-radius:16px; background:rgba(255,138,61,.06); border:1px solid rgba(255,138,61,.18); }
+  .note b{ color:#ffb27a; }
+
+  .btn{
+    appearance:none; border:0; cursor:pointer; font-family:inherit; font-weight:700;
+    border-radius:16px; padding:15px 20px; font-size:15.5px; transition:transform .12s ease, opacity .2s;
+  }
+  .btn:active{ transform:scale(.97); }
+  .btn.primary{ background:linear-gradient(160deg,#ff9f5a,#ff6b35); color:#231000; box-shadow:0 12px 26px -12px rgba(255,110,50,.8); }
+  .btn.ghost{ background:rgba(255,255,255,.07); border:1px solid var(--line); color:var(--txt); }
+  .btn.danger{ background:rgba(255,95,109,.12); border:1px solid rgba(255,95,109,.3); color:#ff8b94; }
+  .btn.block{ width:100%; }
+
+  /* ---------- ring ---------- */
+  .ring{
+    position:fixed; inset:0; z-index:90; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; padding:32px 26px; text-align:center; overflow-y:auto;
+    background:
+      radial-gradient(circle at 50% 30%, rgba(255,138,61,.26) 0%, rgba(255,138,61,0) 58%),
+      #06090d;
+  }
+  .ring > *{ position:relative; z-index:2; }
+  .ring-pulse{
+    position:absolute; z-index:1; width:320px; height:320px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,138,61,.34), transparent 68%);
+    animation:pulse 2s ease-out infinite;
+  }
+  @keyframes pulse{ 0%{ transform:scale(.55); opacity:.95; } 100%{ transform:scale(1.75); opacity:0; } }
+  .ring-kicker{ font-size:13px; letter-spacing:.32em; color:#ffb27a; text-indent:.32em; }
+  .ring-time{ font-size:64px; font-weight:800; letter-spacing:.01em; line-height:1.05; margin-top:6px; }
+  .ring-group{ font-size:15px; font-weight:700; color:var(--accent); margin-top:2px; }
+  .ring-labels{ font-size:15px; color:#c7d3e0; margin-top:2px; }
+  .ring-actions{ display:flex; flex-direction:column; gap:10px; width:100%; max-width:340px; margin-top:34px; }
+
+  /* ---------- toast ---------- */
+  .toast{
+    position:fixed; left:50%; bottom:calc(96px + var(--safe-b)); transform:translate(-50%, 14px);
+    z-index:120; background:rgba(28,38,50,.96); border:1px solid var(--line); color:var(--txt);
+    font-size:13px; padding:11px 18px; border-radius:999px; opacity:0; pointer-events:none;
+    transition:opacity .2s, transform .2s; box-shadow:0 12px 30px rgba(0,0,0,.45); white-space:nowrap;
+  }
+  .toast.show{ opacity:1; transform:translate(-50%,0); }
+
+  @media (min-width:560px){
+    .hero-clock{ font-size:60px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:.001ms !important; transition-duration:.001ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <header class="topbar">
+    <div class="brand"><span class="logo">⏰</span><span>班次闹钟</span></div>
+    <div class="top-actions">
+      <button class="icon-btn" data-action="night-mode" aria-label="守夜模式">☾</button>
+      <button class="icon-btn" data-action="open-settings" aria-label="设置">⚙</button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-clock"><span id="clock">--:--</span><span class="sec" id="sec">:00</span></div>
+    <div class="hero-date" id="date"></div>
+    <div class="hero-today" id="today"></div>
+    <div class="hero-next" id="next-up"></div>
+  </section>
+
+  <div class="sec-head">
+    <div class="sec-title">闹钟分组</div>
+    <div class="sec-sub" id="group-count"></div>
+  </div>
+  <main class="groups" id="groups"></main>
+</div>
+
+<div class="sheet" id="sheet" aria-hidden="true"></div>
+
+<div class="night" id="night" hidden>
+  <div class="night-top">
+    <span class="night-label">守夜模式</span>
+    <button class="night-exit" data-action="exit-night">退出</button>
+  </div>
+  <div class="night-clock"><span id="night-clock">--:--</span><span class="night-sec" id="night-sec">:00</span></div>
+  <div class="night-date" id="night-date"></div>
+  <div class="night-count" id="night-count"></div>
+  <div class="night-next" id="night-next"></div>
+  <div class="night-foot">
+    <p id="night-foot-line">屏幕保持常亮中 · 插上充电器放床头就行</p>
+    <p class="night-dim">别按侧边键锁屏，锁屏后浏览器会暂停计时</p>
+  </div>
+</div>
+
+<div class="ios-tip" id="ios-tip" hidden>
+  <div class="ios-tip-body">
+    <b>装到桌面，当 App 用</b>
+    <p>点 Safari 底部的「分享」按钮（方框加箭头），再选「添加到主屏幕」，点开就是全屏闹钟。</p>
+  </div>
+  <button class="ios-tip-close" data-action="dismiss-tip" aria-label="关闭提示">✕</button>
+</div>
+
+<div class="ring" id="ring" hidden></div>
+<div class="toast" id="toast" role="status"></div>
+
+<noscript><p style="padding:24px;text-align:center">这个闹钟需要开启 JavaScript 才能运行。</p></noscript>
+
+<script>
+'use strict';
+
+/* =========================================================
+   常量与小工具
+   ========================================================= */
+const KEY = 'shift-alarm:v1';
+const WEEK = ['周日','周一','周二','周三','周四','周五','周六'];
+const PALETTE = ['#ff8a3d','#6f8cff','#37d67a','#ff5f9e','#b388ff','#2dd4bf','#ffd166','#7c8fa6'];
+
+const pad = n => String(n).padStart(2, '0');
+const hm  = d => pad(d.getHours()) + ':' + pad(d.getMinutes());
+const uid = () => Math.random().toString(36).slice(2, 9);
+const $   = (s, r = document) => r.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+
+function range(a, b) { const out = []; for (let i = a; i <= b; i++) out.push(i); return out; }
+
+function compactRanges(arr) {
+  const out = [];
+  let i = 0;
+  while (i < arr.length) {
+    let j = i;
+    while (j + 1 < arr.length && arr[j + 1] === arr[j] + 1) j++;
+    out.push(i === j ? String(arr[i]) : arr[i] + '–' + arr[j]);
+    i = j + 1;
+  }
+  return out;
+}
+
+function daySet(arr) { return [...new Set(arr)].sort((a, b) => a - b); }
+
+/* =========================================================
+   状态
+   ========================================================= */
+function seedState() {
+  return {
+    version: 1,
+    groups: [
+      {
+        id: 'g-early', name: '早班', color: '#ff8a3d', enabled: true,
+        days: range(1, 10), clamp: true, snooze: 5,
+        alarms: [
+          { id: 'a1', time: '06:30', label: '起床', enabled: true },
+          { id: 'a2', time: '06:55', label: '出门', enabled: true },
+          { id: 'a3', time: '07:20', label: '打卡', enabled: true }
+        ]
+      },
+      {
+        id: 'g-late', name: '晚班', color: '#6f8cff', enabled: true,
+        days: range(11, 20), clamp: true, snooze: 5,
+        alarms: [
+          { id: 'b1', time: '13:20', label: '起床', enabled: true },
+          { id: 'b2', time: '13:45', label: '出门', enabled: true },
+          { id: 'b3', time: '14:10', label: '交接班', enabled: true }
+        ]
+      },
+      {
+        id: 'g-rest', name: '休息日', color: '#37d67a', enabled: true,
+        days: range(21, 31), clamp: true, snooze: 10,
+        alarms: [
+          { id: 'c1', time: '09:30', label: '慢慢起床', enabled: true }
+        ]
+      }
+    ],
+    settings: {
+      volume: 0.85, vibrate: true, sound: 'chime', fade: 30,
+      brief: {
+        on: true, weather: true, shift: true, news: false,
+        city: '', lat: null, lon: null, place: '',
+        note: '', rss: ''
+      }
+    },
+    snoozed: []
+  };
+}
+
+function normalize(s) {
+  const base = seedState();
+  const st = Object.assign({}, base, s || {});
+  st.settings = Object.assign({}, base.settings, st.settings || {});
+  if (typeof st.settings.sound !== 'string' || !st.settings.sound) st.settings.sound = 'chime';
+  st.settings.fade = [0, 15, 30, 60].includes(Number(st.settings.fade)) ? Number(st.settings.fade) : 30;
+  st.settings.brief = Object.assign({}, base.settings.brief, st.settings.brief || {});
+  st.groups = Array.isArray(st.groups) ? st.groups : [];
+  st.snoozed = Array.isArray(st.snoozed) ? st.snoozed : [];
+  st.groups.forEach(g => {
+    g.id = g.id || uid();
+    g.name = g.name || '未命名分组';
+    g.color = g.color || PALETTE[0];
+    g.enabled = g.enabled !== false;
+    g.days = daySet((g.days || []).map(Number).filter(n => n >= 1 && n <= 31));
+    g.clamp = g.clamp !== false;
+    g.snooze = [3, 5, 10, 15, 20].includes(Number(g.snooze)) ? Number(g.snooze) : 5;
+    g.alarms = (g.alarms || []).filter(a => a && /^\d{1,2}:\d{2}$/.test(a.time || ''))
+      .map(a => ({ id: a.id || uid(), time: a.time, label: a.label || '', enabled: a.enabled !== false }));
+    g.alarms.sort((a, b) => a.time.localeCompare(b.time));
+  });
+  return st;
+}
+
+let state = loadState();
+let view = { sheet: null, groupId: null };
+let firedKeys = new Set();
+let ringing = null;
+let ringStart = 0;
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return seedState();
+    return normalize(JSON.parse(raw));
+  } catch (e) {
+    return seedState();
+  }
+}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 隐私模式等 */ }
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = $('#toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1900);
+}
+
+/* =========================================================
+   日期 / 生效日 计算
+   ========================================================= */
+/** 某分组在指定年月里，实际能触发的日期集合（处理 2 月没有 30/31 日） */
+function effectiveDays(group, y, m) {
+  const n = daysInMonth(y, m);
+  const set = new Set();
+  for (const d of group.days) {
+    if (d <= n) set.add(d);
+    else if (group.clamp) set.add(n);
+  }
+  return set;
+}
+
+function isActiveOn(group, date) {
+  return effectiveDays(group, date.getFullYear(), date.getMonth()).has(date.getDate());
+}
+
+/** 找这个组下一次会响的时间（从 from 起 400 天内） */
+function nextFor(group, from) {
+  if (!group.enabled || !group.alarms.length) return null;
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  for (let i = 0; i < 400; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    if (!isActiveOn(group, d)) continue;
+    let best = null;
+    for (const a of group.alarms) {
+      if (!a.enabled) continue;
+      const [h, mi] = a.time.split(':').map(Number);
+      const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, mi, 0, 0);
+      if (at.getTime() <= from.getTime()) continue;
+      if (!best || at < best.at) best = { at, alarm: a };
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
+function fmtWhen(at) {
+  const now = new Date();
+  const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const d1 = new Date(at.getFullYear(), at.getMonth(), at.getDate());
+  const diff = Math.round((d1 - d0) / 86400000);
+  const t = hm(at);
+  if (diff === 0) return '今天 ' + t;
+  if (diff === 1) return '明天 ' + t;
+  if (diff === 2) return '后天 ' + t;
+  return (at.getMonth() + 1) + '月' + at.getDate() + '日 ' + WEEK[at.getDay()] + ' ' + t;
+}
+
+function patternText(g) {
+  if (!g.days.length) return '还没选生效日';
+  return '每月 ' + compactRanges(daySet(g.days)).join('、') + ' 日';
+}
+
+/* =========================================================
+   渲染：首页
+   ========================================================= */
+const groupsEl = $('#groups');
+
+function cardHTML(g) {
+  const now = new Date();
+  const active = isActiveOn(g, now);
+  const next = nextFor(g, now);
+  const sorted = g.alarms.slice().sort((a, b) => a.time.localeCompare(b.time));
+  const shown = sorted.slice(0, 4);
+  const rest = sorted.length - shown.length;
+
+  const chips = shown.length
+    ? shown.map(a => `<span class="chip${a.enabled ? '' : ' dim'}">${a.time}${a.label ? ' ' + esc(a.label) : ''}</span>`).join('')
+      + (rest > 0 ? `<span class="chip more">+${rest}</span>` : '')
+    : '<span class="chip">还没有闹钟</span>';
+
+  let nextLine;
+  if (!g.enabled) nextLine = '分组已关闭';
+  else if (!g.days.length) nextLine = '⚠️ 选一下每月哪几天生效';
+  else if (!next) nextLine = '没有可响铃的闹钟';
+  else nextLine = '⏰ 下次 ' + fmtWhen(next.at) + (next.alarm.label ? ' · ' + esc(next.alarm.label) : '');
+
+  return `
+  <article class="gcard${g.enabled ? '' : ' off'}" style="--accent:${g.color}" data-action="open-group" data-id="${g.id}">
+    <div class="ghead">
+      <div class="gname">${esc(g.name)}</div>
+      <button class="switch" role="switch" aria-checked="${g.enabled}" data-action="toggle-group" data-id="${g.id}" aria-label="启用或关闭 ${esc(g.name)}"></button>
+    </div>
+    <div class="gmeta">
+      <span>${patternText(g)}</span>
+      <span>·</span>
+      <span>${g.alarms.length} 个闹钟</span>
+      ${active && g.enabled ? '<span class="badge">今日生效</span>' : ''}
+      ${!g.days.length ? '<span class="badge warn">待设置</span>' : ''}
+    </div>
+    <div class="chips">${chips}</div>
+    <div class="gnext">${nextLine}</div>
+  </article>`;
+}
+
+function renderHome() {
+  if (!state.groups.length) {
+    groupsEl.innerHTML = `
+      <div class="empty">
+        <div class="emoji">🗓️</div>
+        <h2>先建一个班次分组</h2>
+        <p>比如「早班」「晚班」。给每个组选好每月哪几天生效，再往组里放当天要响的闹钟。</p>
+        <button class="btn primary" data-action="new-group">创建第一个分组</button>
+      </div>`;
+  } else {
+    groupsEl.innerHTML = state.groups.map(cardHTML).join('')
+      + `<button class="add-group-tile" data-action="new-group">＋ 新建分组</button>`;
+  }
+  $('#group-count').textContent = state.groups.length ? state.groups.length + ' 组' : '';
+  updateTodayTags();
+  updateNextUp();
+}
+
+function updateTodayTags() {
+  const now = new Date();
+  const tags = state.groups.filter(g => g.enabled && isActiveOn(g, now));
+  const el = $('#today');
+  if (!tags.length) {
+    el.innerHTML = '<span class="badge warn">今天没有生效的分组</span>';
+    return;
+  }
+  el.innerHTML = tags.map(g => `<span class="badge" style="color:${g.color};background:${hexA(g.color, .12)};border-color:${hexA(g.color, .3)}">今日 · ${esc(g.name)}</span>`).join('');
+}
+
+function hexA(hex, a) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function bestNext() {
+  const now = new Date();
+  let best = null;
+  for (const g of state.groups) {
+    const n = nextFor(g, now);
+    if (!n) continue;
+    if (!best || n.at < best.at) best = { at: n.at, alarm: n.alarm, group: g };
+  }
+  return best;
+}
+
+function updateNextUp() {
+  const best = bestNext();
+  const el = $('#next-up');
+  if (!best) {
+    el.innerHTML = '<span class="pulse-dot" style="opacity:.3"></span><span>暂无即将响铃的闹钟</span>';
+    return;
+  }
+  el.innerHTML = `<span class="pulse-dot" style="background:${best.group.color}"></span>
+    <span>下一次 <b>${fmtWhen(best.at)}</b> · ${esc(best.group.name)}${best.alarm.label ? ' · ' + esc(best.alarm.label) : ''}</span>`;
+}
+
+/* =========================================================
+   守夜模式：全屏大时钟 + 屏幕常亮（iPhone 上过夜用）
+   ========================================================= */
+let nightOn = false;
+
+function enterNight() {
+  nightOn = true;
+  $('#night').hidden = false;
+  document.body.classList.add('locked');
+  updateNight();
+  syncWakeLock();
+  updateNightFoot();
+  setTimeout(updateNightFoot, 800);
+  const best = bestNext();
+  if (state.settings.volume <= 0.02) toast('音量是 0，响铃会没声音');
+  else if (!best) toast('接下来没有闹钟');
+  else toast('守夜模式已开启');
+}
+
+function exitNight() {
+  nightOn = false;
+  $('#night').hidden = true;
+  if (!ringing) document.body.classList.remove('locked');
+  syncWakeLock();
+}
+
+/** 把毫秒说成人话：「7 小时 20 分」 */
+function untilText(ms) {
+  const mins = Math.max(0, Math.round(ms / 60000));
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor((mins % 1440) / 60);
+  const m = mins % 60;
+  if (d > 0) return d + ' 天 ' + h + ' 小时';
+  if (h > 0) return h + ' 小时' + (m ? ' ' + m + ' 分' : '');
+  return Math.max(1, m) + ' 分钟';
+}
+
+function updateNightFoot() {
+  if (!nightOn) return;
+  const el = $('#night-foot-line');
+  if (!el) return;
+  el.textContent = wakeLock
+    ? '屏幕保持常亮中 · 插上充电器放床头就行'
+    : '没法自动常亮：去 设置 › 显示与亮度 › 自动锁定 选「永不」';
+}
+
+function updateNight() {
+  if (!nightOn) return;
+  const now = new Date();
+  $('#night-clock').textContent = hm(now);
+  $('#night-sec').textContent = ':' + pad(now.getSeconds());
+  const active = state.groups.filter(g => g.enabled && isActiveOn(g, now)).map(g => g.name);
+  $('#night-date').textContent = (now.getMonth() + 1) + '月' + now.getDate() + '日 '
+    + WEEK[now.getDay()] + ' · ' + (active.length ? active.join(' / ') : '今天没有班次');
+
+  const best = bestNext();
+  const countEl = $('#night-count');
+  const nextEl = $('#night-next');
+  if (best) {
+    const ms = best.at.getTime() - now.getTime();
+    const far = ms > 20 * 3600 * 1000;
+    countEl.innerHTML = far
+      ? `<span class="night-warn">还有 ${untilText(ms)} —— 确认一下闹钟设对了吗</span>`
+      : `还有 <b>${untilText(ms)}</b>`;
+    nextEl.innerHTML = `下一次 ${fmtWhen(best.at)} · ${esc(best.group.name)}${best.alarm.label ? ' · ' + esc(best.alarm.label) : ''}`;
+  } else {
+    countEl.innerHTML = '<span class="night-warn">接下来没有闹钟</span>';
+    nextEl.textContent = '去添加一个组吧';
+  }
+}
+
+/* =========================================================
+   渲染：设置面板（分组 / 全局设置）
+   ========================================================= */
+function openGroup(id) {
+  const g = state.groups.find(x => x.id === id);
+  if (!g) return;
+  view = { sheet: 'group', groupId: id };
+  renderSheet();
+}
+
+function openSettings() {
+  view = { sheet: 'settings', groupId: null };
+  renderSheet();
+}
+
+function closeSheet() {
+  view = { sheet: null, groupId: null };
+  renderSheet();
+  renderHome();
+}
+
+function renderSheet() {
+  const sheet = $('#sheet');
+  if (!view.sheet) {
+    sheet.classList.remove('open');
+    sheet.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('locked');
+    setTimeout(() => { if (!view.sheet) sheet.innerHTML = ''; }, 320);
+    return;
+  }
+  const g = view.groupId ? state.groups.find(x => x.id === view.groupId) : null;
+  sheet.style.setProperty('--accent', g ? g.color : PALETTE[0]);
+  sheet.innerHTML = view.sheet === 'group' && g ? groupSheetHTML(g) : settingsSheetHTML();
+  sheet.classList.add('open');
+  sheet.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('locked');
+  sheet.scrollTop = 0;
+  if (view.sheet === 'group' && view.focusName) {
+    const input = $('.text-input', sheet);
+    if (input) { input.focus(); input.select(); }
+  }
+  view.focusName = false;
+}
+
+/** 重新渲染当前面板，但保持滚动位置（改颜色、增删闹钟时不要跳回顶部） */
+function rerenderSheet() {
+  const sheet = $('#sheet');
+  const top = sheet.scrollTop;
+  renderSheet();
+  sheet.scrollTop = top;
+}
+
+const PRESETS = [
+  { k: '1-10', label: '1–10 日', days: range(1, 10) },
+  { k: '11-20', label: '11–20 日', days: range(11, 20) },
+  { k: '21-31', label: '21–31 日', days: range(21, 31) },
+  { k: '1-15', label: '1–15 日', days: range(1, 15) },
+  { k: '16-31', label: '16–31 日', days: range(16, 31) },
+  { k: 'odd', label: '单数日', days: range(1, 31).filter(d => d % 2) },
+  { k: 'even', label: '双数日', days: range(1, 31).filter(d => d % 2 === 0) },
+  { k: 'all', label: '每天', days: range(1, 31) },
+  { k: 'none', label: '清空', days: [] }
+];
+
+function groupSheetHTML(g) {
+  const dayBtns = range(1, 31).map(d =>
+    `<button class="day" data-action="toggle-day" data-day="${d}" aria-pressed="${g.days.includes(d)}">${d}</button>`
+  ).join('');
+
+  const rows = g.alarms.map(a => `
+    <div class="alarm${a.enabled ? '' : ' off'}" data-alarm="${a.id}">
+      <input type="time" value="${a.time}" data-field="alarm-time" data-id="${a.id}" aria-label="闹钟时间" step="60">
+      <input type="text" value="${esc(a.label)}" placeholder="备注（可选）" maxlength="10" data-field="alarm-label" data-id="${a.id}" aria-label="闹钟备注">
+      <button class="switch sm" role="switch" aria-checked="${a.enabled}" data-action="toggle-alarm" data-id="${a.id}" aria-label="启用这个闹钟"></button>
+      <button class="del" data-action="delete-alarm" data-id="${a.id}" aria-label="删除这个闹钟">✕</button>
+    </div>`).join('');
+
+  return `
+  <div class="sheet-inner">
+    <div class="sheet-bar">
+      <button class="icon-btn" data-action="close-sheet" aria-label="返回">‹</button>
+      <div class="sheet-title">${esc(g.name)}</div>
+      <button class="icon-btn danger" data-action="delete-group" data-id="${g.id}">删除</button>
+    </div>
+
+    <div class="field">
+      <label for="gname">分组名称</label>
+      <input id="gname" class="text-input" value="${esc(g.name)}" maxlength="8" data-field="group-name" placeholder="例如：早班">
+      <div class="swatches">
+        ${PALETTE.map(c => `<button class="swatch" style="background:${c}" data-action="set-color" data-color="${c}" aria-pressed="${g.color === c}" aria-label="颜色 ${c}"></button>`).join('')}
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label>这一天的闹钟</label>
+        <span class="hint">${g.alarms.length ? g.alarms.length + ' 个 · 按时间排序' : '还没有'}</span>
+      </div>
+      ${rows || '<div class="hint" style="margin:0 0 12px">还没有闹钟，点下面添加一个。</div>'}
+      <button class="add-alarm" data-action="add-alarm">＋ 添加一个闹钟</button>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label>每月哪几天生效</label>
+        <span class="hint${g.days.length ? '' : ' warn'}" data-role="day-count">${g.days.length ? '已选 ' + g.days.length + ' 天' : '还没选'}</span>
+      </div>
+      <div class="presets">
+        ${PRESETS.map(p => `<button class="preset" data-action="preset" data-preset="${p.k}">${p.label}</button>`).join('')}
+      </div>
+      <div class="days">${dayBtns}</div>
+      <label class="check">
+        <input type="checkbox" data-field="clamp" ${g.clamp ? 'checked' : ''}>
+        <span>遇到当月没有的日子（比如 2 月 30 日）就顺到当月最后一天；不勾选则直接跳过</span>
+      </label>
+    </div>
+
+    <div class="field">
+      <label>小睡时长</label>
+      <div class="seg">
+        ${[3, 5, 10, 15].map(m => `<button data-action="set-snooze" data-min="${m}" aria-pressed="${g.snooze === m}">${m} 分钟</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="note">
+      <b>怎么用：</b>点开这一组，就是该班次当天要响的全部闹钟。上面选中的日子一到，它们就按时间依次响；想改时间直接点时间，改完马上生效。
+    </div>
+  </div>`;
+}
+
+function settingsSheetHTML() {
+  const notifyState = ('Notification' in window) ? Notification.permission : 'unsupported';
+  const notifyText = notifyState === 'granted' ? '已允许' : notifyState === 'denied' ? '已被拒绝（需去浏览器设置里改）' : notifyState === 'unsupported' ? '此浏览器不支持' : '未开启';
+
+  const cur = currentSoundId();
+  const b = state.settings.brief;
+  const curItem = cur.indexOf('custom:') === 0 ? findCustom(cur.slice(7)) : null;
+  const curBuiltin = BUILTIN_SOUNDS.find(s => s.id === cur) || BUILTIN_SOUNDS[0];
+  const soundName = curItem ? curItem.name : curBuiltin.name;
+  const customList = customSounds.length
+    ? `<div class="custom-sounds">${customSounds.map(c => {
+        const on = cur === 'custom:' + c.id;
+        return `<div class="sound-item">
+          <button class="sound-item-main" data-action="pick-sound" data-sound="custom:${c.id}" aria-pressed="${on}">
+            <span class="sound-item-name">${esc(c.name)}</span>
+            <span class="sound-item-size">${fmtSize(c.size)}</span>
+          </button>
+          <button class="sound-mini" data-action="preview-custom" data-id="${c.id}">试听</button>
+          <button class="sound-mini danger" data-action="delete-sound" data-id="${c.id}" aria-label="删除铃声">✕</button>
+        </div>`;
+      }).join('')}</div>`
+    : '';
+
+  return `
+  <div class="sheet-inner">
+    <div class="sheet-bar">
+      <button class="icon-btn" data-action="close-sheet" aria-label="返回">‹</button>
+      <div class="sheet-title">设置</div>
+      <span style="width:40px"></span>
+    </div>
+
+    <div class="field">
+      <div class="field-head"><label>闹钟铃声</label><span class="hint">${esc(soundName)}</span></div>
+      <div class="sounds">
+        ${BUILTIN_SOUNDS.map(s => `<button class="sound-chip" data-action="pick-sound" data-sound="${s.id}" aria-pressed="${cur === s.id}">${s.name}</button>`).join('')}
+      </div>
+      ${customList}
+      <button class="btn ghost block" data-action="upload-sound">＋ 上传自定义铃声</button>
+      <input type="file" id="sound-file" accept="audio/*">
+      <p class="hint" style="margin:10px 0 0">手机里的 mp3 / m4a / wav 都能用，会保存在本机浏览器里，不上传。</p>
+    </div>
+
+    <div class="field">
+      <div class="field-head"><label>铃声音量</label><span class="hint" data-role="vol-label">${Math.round(state.settings.volume * 100)}%</span></div>
+      <input type="range" min="0" max="100" value="${Math.round(state.settings.volume * 100)}" data-field="volume" style="width:100%; accent-color:var(--accent)">
+      <div class="field-head" style="margin-top:16px"><label>渐响（从轻到响）</label><span class="hint">${state.settings.fade ? state.settings.fade + ' 秒' : '关闭'}</span></div>
+      <div class="seg">
+        ${[0, 15, 30, 60].map(s => `<button data-action="set-fade" data-sec="${s}" aria-pressed="${state.settings.fade === s}">${s ? s + ' 秒' : '关闭'}</button>`).join('')}
+      </div>
+      <button class="btn ghost block" style="margin-top:14px" data-action="test-sound">▶ 试听铃声</button>
+    </div>
+
+    <div class="field">
+      <div class="field-head"><label>晨间播报</label><span class="hint">${b.on ? '已开启' : '关闭'}</span></div>
+      <div class="row-toggle">
+        <span>起床后读一段播报</span>
+        <button class="switch" role="switch" aria-checked="${b.on}" data-action="toggle-brief" aria-label="晨间播报"></button>
+      </div>
+      ${b.on ? `
+      <div class="brief-opts">
+        <label class="check"><input type="checkbox" data-field="brief-weather" ${b.weather ? 'checked' : ''}><span>天气</span></label>
+        <label class="check"><input type="checkbox" data-field="brief-shift" ${b.shift ? 'checked' : ''}><span>今天的班次</span></label>
+        <label class="check"><input type="checkbox" data-field="brief-news" ${b.news ? 'checked' : ''}><span>新闻头条</span></label>
+      </div>
+      <div class="mini-label">天气城市</div>
+      <input class="text-input mini" placeholder="比如 杭州" data-field="brief-city" value="${esc(b.city)}" maxlength="12">
+      <p class="hint" style="margin:6px 0 0">${b.place ? '已定位：' + esc(b.place) : '填城市名，回车后自动查坐标'}</p>
+      <div class="mini-label">想听的一句话</div>
+      <input class="text-input mini" placeholder="比如 记得带工牌" data-field="brief-note" value="${esc(b.note)}" maxlength="30">
+      <div class="mini-label">新闻 RSS 地址</div>
+      <input class="text-input mini" placeholder="https://36kr.com/feed" data-field="brief-rss" value="${esc(b.rss)}">
+      <button class="btn ghost block" style="margin-top:14px" data-action="test-brief">🔊 试听播报</button>
+      ` : ''}
+      <p class="hint" style="margin:10px 0 0">播报用手机自带语音朗读；天气来自 open-meteo，新闻读你填的 RSS。</p>
+    </div>
+
+    <div class="field">
+      <div class="field-head" style="margin-bottom:0">
+        <label style="margin:0">响铃时震动</label>
+        <button class="switch" role="switch" aria-checked="${state.settings.vibrate}" data-action="toggle-vibrate" aria-label="震动"></button>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field-head"><label>系统通知</label><span class="hint">${notifyText}</span></div>
+      <button class="btn ghost block" data-action="ask-notify">开启通知权限</button>
+    </div>
+
+    <div class="field">
+      <div class="field-head"><label>过夜使用</label><span class="hint">屏幕常亮</span></div>
+      <button class="btn ghost block" data-action="night-mode">☾ 进入守夜模式</button>
+      <p class="hint" style="margin:10px 0 0">全屏大时钟、屏幕不熄灭，放在床头到点就响。记得插上充电器。</p>
+    </div>
+
+    <div class="note" style="margin-bottom:18px">
+      <b>关于准时响铃：</b>网页版必须让页面留在前台——锁屏或切到别的 App 后，手机系统会把它暂停。iPhone 上建议进「守夜模式」：屏幕常亮、大时钟放床头。要是系统还是自动锁屏，把「设置 › 显示与亮度 › 自动锁定」改成「永不」。想要关屏也能响，得用原生 App。
+    </div>
+
+    <div class="field">
+      <label>数据</label>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn ghost block" data-action="reset-seed">恢复示例分组</button>
+        <button class="btn danger block" data-action="clear-all">清空所有分组</button>
+      </div>
+      <p class="hint" style="margin:12px 0 0">所有数据只保存在这台设备的浏览器里，不会上传。</p>
+    </div>
+
+    <p class="hint" style="text-align:center;margin-top:8px">班次闹钟 · 为轮班的人做的</p>
+  </div>`;
+}
+
+/* =========================================================
+   交互
+   ========================================================= */
+function findGroup(id) { return state.groups.find(g => g.id === id); }
+function findAlarm(g, id) { return g.alarms.find(a => a.id === id); }
+
+function addGroup() {
+  const today = new Date().getDate();
+  const g = {
+    id: uid(),
+    name: '新分组',
+    color: PALETTE[state.groups.length % PALETTE.length],
+    enabled: true,
+    days: [today],
+    clamp: true,
+    snooze: 5,
+    alarms: [{ id: uid(), time: '07:00', label: '起床', enabled: true }]
+  };
+  state.groups.push(g);
+  save();
+  view = { sheet: 'group', groupId: g.id, focusName: true };
+  renderSheet();
+  renderHome();
+}
+
+function deleteGroup(id) {
+  const g = findGroup(id);
+  if (!g) return;
+  if (!confirm('删除分组「' + g.name + '」？组里的闹钟也会一起删掉。')) return;
+  state.groups = state.groups.filter(x => x.id !== id);
+  save();
+  closeSheet();
+  toast('已删除「' + g.name + '」');
+}
+
+function toggleDay(btn, day) {
+  const g = findGroup(view.groupId);
+  if (!g) return;
+  const has = g.days.includes(day);
+  g.days = has ? g.days.filter(d => d !== day) : daySet([...g.days, day]);
+  btn.setAttribute('aria-pressed', String(!has));
+  const counter = $('[data-role="day-count"]');
+  if (counter) {
+    counter.textContent = g.days.length ? '已选 ' + g.days.length + ' 天' : '还没选';
+    counter.classList.toggle('warn', !g.days.length);
+  }
+  save();
+  renderHome();
+}
+
+function applyPreset(k) {
+  const g = findGroup(view.groupId);
+  const p = PRESETS.find(x => x.k === k);
+  if (!g || !p) return;
+  g.days = daySet(p.days);
+  save();
+  rerenderSheet();
+  renderHome();
+}
+
+function addAlarm() {
+  const g = findGroup(view.groupId);
+  if (!g) return;
+  const last = g.alarms[g.alarms.length - 1];
+  let t = '07:00';
+  if (last) {
+    const [h, m] = last.time.split(':').map(Number);
+    const total = (h * 60 + m + 15) % (24 * 60);
+    t = pad(Math.floor(total / 60)) + ':' + pad(total % 60);
+  }
+  g.alarms.push({ id: uid(), time: t, label: '', enabled: true });
+  g.alarms.sort((a, b) => a.time.localeCompare(b.time));
+  save();
+  rerenderSheet();
+  renderHome();
+}
+
+function deleteAlarm(id) {
+  const g = findGroup(view.groupId);
+  if (!g) return;
+  g.alarms = g.alarms.filter(a => a.id !== id);
+  save();
+  rerenderSheet();
+  renderHome();
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  const id = el.dataset.id;
+
+  switch (action) {
+    case 'new-group': addGroup(); break;
+    case 'open-group': openGroup(id); break;
+    case 'close-sheet': closeSheet(); break;
+    case 'open-settings': openSettings(); break;
+    case 'night-mode': enterNight(); break;
+    case 'exit-night': exitNight(); break;
+    case 'dismiss-tip': {
+      const tip = $('#ios-tip');
+      if (tip) tip.hidden = true;
+      try { localStorage.setItem('ios-tip-dismissed', '1'); } catch (e) {}
+      break;
+    }
+
+    case 'toggle-group': {
+      const g = findGroup(id);
+      if (!g) break;
+      g.enabled = !g.enabled;
+      save();
+      el.setAttribute('aria-checked', String(g.enabled));
+      const card = el.closest('.gcard');
+      if (card) card.classList.toggle('off', !g.enabled);
+      renderHome();
+      toast(g.enabled ? '「' + g.name + '」已开启' : '「' + g.name + '」已关闭');
+      break;
+    }
+
+    case 'toggle-day': toggleDay(el, Number(el.dataset.day)); break;
+    case 'preset': applyPreset(el.dataset.preset); break;
+
+    case 'set-color': {
+      const g = findGroup(view.groupId);
+      if (!g) break;
+      g.color = el.dataset.color;
+      save();
+      rerenderSheet();
+      renderHome();
+      break;
+    }
+
+    case 'add-alarm': addAlarm(); break;
+    case 'delete-alarm': deleteAlarm(id); break;
+
+    case 'toggle-alarm': {
+      const g = findGroup(view.groupId);
+      const a = g && findAlarm(g, id);
+      if (!a) break;
+      a.enabled = !a.enabled;
+      save();
+      el.setAttribute('aria-checked', String(a.enabled));
+      const row = el.closest('.alarm');
+      if (row) row.classList.toggle('off', !a.enabled);
+      renderHome();
+      break;
+    }
+
+    case 'set-snooze': {
+      const g = findGroup(view.groupId);
+      if (!g) break;
+      g.snooze = Number(el.dataset.min);
+      save();
+      rerenderSheet();
+      break;
+    }
+
+    case 'delete-group': deleteGroup(id); break;
+
+    case 'toggle-vibrate': {
+      state.settings.vibrate = !state.settings.vibrate;
+      save();
+      el.setAttribute('aria-checked', String(state.settings.vibrate));
+      if (state.settings.vibrate && navigator.vibrate) navigator.vibrate(30);
+      break;
+    }
+
+    case 'test-sound': {
+      primeAudio();
+      previewSound(currentSoundId());
+      toast('这是闹钟铃声');
+      break;
+    }
+
+    case 'pick-sound': {
+      const s = el.dataset.sound;
+      if (s.indexOf('custom:') === 0 && !findCustom(s.slice(7))) { toast('找不到这个铃声'); break; }
+      state.settings.sound = s;
+      save();
+      rerenderSheet();
+      previewSound(s);
+      break;
+    }
+
+    case 'preview-custom': {
+      primeAudio();
+      previewSound('custom:' + el.dataset.id);
+      break;
+    }
+
+    case 'delete-sound': deleteCustomSound(el.dataset.id); break;
+
+    case 'set-fade': {
+      state.settings.fade = Number(el.dataset.sec);
+      save();
+      rerenderSheet();
+      break;
+    }
+
+    case 'toggle-brief': {
+      state.settings.brief.on = !state.settings.brief.on;
+      save();
+      rerenderSheet();
+      if (state.settings.brief.on) toast('起床后会读一段播报');
+      break;
+    }
+
+    case 'test-brief': testBrief(); break;
+    case 'speak-brief': if (ringing && ringing.brief) speak(ringing.brief); break;
+
+    case 'upload-sound': {
+      const input = $('#sound-file');
+      if (input) input.click();
+      break;
+    }
+
+    case 'ask-notify': {
+      if (!('Notification' in window)) { toast('这个浏览器不支持通知'); break; }
+      Notification.requestPermission().then(p => {
+        toast(p === 'granted' ? '通知已开启' : '没有拿到通知权限');
+        rerenderSheet();
+      });
+      break;
+    }
+
+    case 'reset-seed': {
+      if (!confirm('恢复成示例的三个分组？当前分组会被覆盖。')) break;
+      state = seedState();
+      save();
+      closeSheet();
+      toast('已恢复示例');
+      break;
+    }
+
+    case 'clear-all': {
+      if (!confirm('清空所有分组和闹钟？')) break;
+      state.groups = [];
+      state.snoozed = [];
+      save();
+      closeSheet();
+      toast('已清空');
+      break;
+    }
+
+    case 'ring-stop': stopRing(); break;
+    case 'ring-snooze': snoozeRing(); break;
+  }
+});
+
+/* 输入类控件 */
+document.addEventListener('input', e => {
+  const el = e.target.closest('[data-field]');
+  if (!el) return;
+  const f = el.dataset.field;
+
+  if (f === 'group-name') {
+    const g = findGroup(view.groupId);
+    if (!g) return;
+    g.name = el.value.slice(0, 8);
+    const title = $('.sheet-title');
+    if (title) title.textContent = g.name || '未命名';
+    save();
+    renderHome();
+  }
+
+  if (f === 'alarm-label') {
+    const g = findGroup(view.groupId);
+    const a = g && findAlarm(g, el.dataset.id);
+    if (!a) return;
+    a.label = el.value.slice(0, 10);
+    save();
+    renderHome();
+  }
+
+  if (f === 'alarm-time') {
+    const g = findGroup(view.groupId);
+    const a = g && findAlarm(g, el.dataset.id);
+    if (!a || !/^\d{2}:\d{2}$/.test(el.value)) return;
+    a.time = el.value;
+    save();
+    renderHome();
+  }
+
+  if (f === 'volume') {
+    state.settings.volume = Math.max(0, Math.min(1, Number(el.value) / 100));
+    const lab = $('[data-role="vol-label"]');
+    if (lab) lab.textContent = Math.round(state.settings.volume * 100) + '%';
+    save();
+  }
+
+  if (f === 'brief-note') {
+    state.settings.brief.note = el.value.slice(0, 30);
+    save();
+  }
+
+  if (f === 'brief-rss') {
+    state.settings.brief.rss = el.value.trim();
+    save();
+  }
+
+  if (f === 'brief-city') {
+    state.settings.brief.city = el.value.trim();
+    save();
+  }
+});
+
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'sound-file') {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    onSoundFile(file);
+    return;
+  }
+  const el = e.target.closest('[data-field]');
+  if (!el) return;
+  if (el.dataset.field === 'clamp') {
+    const g = findGroup(view.groupId);
+    if (!g) return;
+    g.clamp = el.checked;
+    save();
+    renderHome();
+  }
+  if (el.dataset.field === 'brief-city') {
+    geocodeCity(el.value);
+    return;
+  }
+  if (el.dataset.field === 'brief-weather' || el.dataset.field === 'brief-shift' || el.dataset.field === 'brief-news') {
+    const key = el.dataset.field.slice(6);
+    state.settings.brief[key] = el.checked;
+    save();
+    return;
+  }
+  if (el.dataset.field === 'alarm-time') {
+    const g = findGroup(view.groupId);
+    const a = g && findAlarm(g, el.dataset.id);
+    if (a && /^\d{2}:\d{2}$/.test(el.value) && a.time !== el.value) {
+      a.time = el.value;
+      g.alarms.sort((x, y) => x.time.localeCompare(y.time));
+      save();
+      renderHome();
+    }
+  }
+});
+
+/* =========================================================
+   时钟
+   ========================================================= */
+function updateClock(now) {
+  const t = hm(now);
+  const c = $('#clock');
+  if (c.textContent !== t) c.textContent = t;
+  const s = $('#sec');
+  const ss = ':' + pad(now.getSeconds());
+  if (s.textContent !== ss) s.textContent = ss;
+  const dstr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 ' + WEEK[now.getDay()];
+  const d = $('#date');
+  if (d.textContent !== dstr) d.textContent = dstr;
+}
+
+/* =========================================================
+   响铃
+   ========================================================= */
+let audioCtx = null, soundTimer = null, vibTimer = null, wakeLock = null;
+
+function ensureCtx() {
+  try {
+    if (!audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audioCtx = new Ctx();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  } catch (e) { return null; }
+}
+
+function primeAudio() {
+  const ctx = ensureCtx();
+  if (!ctx) return;
+  try {
+    const b = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = b;
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch (e) { /* ignore */ }
+}
+
+/* ---------------- 铃声 ---------------- */
+const BUILTIN_SOUNDS = [
+  { id: 'chime', name: '三音铃声' },
+  { id: 'beep', name: '数字滴滴' },
+  { id: 'pulse', name: '低音脉冲' },
+  { id: 'gentle', name: '轻木琴' }
+];
+
+let customSounds = [];          // [{ id, name, size, url }]
+let customAudioEl = null;
+let customTimer = null;
+let mediaSource = null;
+let mediaGain = null;
+let previewEl = null;
+
+/** 渐响系数：从 12% 音量开始，在设定秒数内慢慢拉到满 */
+function rampFactor() {
+  if (!ringStart) return 1;
+  const fade = Number(state.settings.fade);
+  if (!fade) return 1;
+  const t = Math.min(1, (Date.now() - ringStart) / (fade * 1000));
+  return 0.12 + 0.88 * t;
+}
+
+function tone(ctx, freq, start, dur, peak, type) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), start + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(start);
+  osc.stop(start + dur + 0.06);
+}
+
+/** 内置铃声：Web Audio 现场合成，不占存储 */
+function playBuiltin(id, vol) {
+  const ctx = ensureCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  const v = Math.max(0, Math.min(1, vol));
+  if (v <= 0.001) return;
+  const ramp = rampFactor();
+  const peak = 0.26 * v * ramp;
+  const t0 = ctx.currentTime + 0.04;
+
+  if (id === 'beep') {
+    for (let i = 0; i < 4; i++) tone(ctx, 1000, t0 + i * 0.26, 0.13, 0.15 * v * ramp, 'square');
+    return;
+  }
+  if (id === 'pulse') {
+    tone(ctx, 440, t0, 0.85, peak * 0.95, 'sine');
+    tone(ctx, 330, t0 + 0.95, 1.15, peak, 'sine');
+    return;
+  }
+  if (id === 'gentle') {
+    const seq = [[523.3, 0], [659.3, 0.22], [784.0, 0.44], [1046.5, 0.66], [784.0, 1.10]];
+    for (const [f, dt] of seq) tone(ctx, f, t0 + dt, 1.15, peak * 0.8, 'triangle');
+    return;
+  }
+  // 默认三音铃声
+  const notes = [
+    [880.0, 0.00, 0.50], [1108.7, 0.15, 0.50], [1318.5, 0.30, 0.85],
+    [1108.7, 0.78, 0.45], [1318.5, 0.92, 1.10]
+  ];
+  for (const [f, dt, dur] of notes) tone(ctx, f, t0 + dt, dur, peak, 'sine');
+}
+
+function currentSoundId() {
+  const s = state.settings.sound;
+  return typeof s === 'string' && s ? s : 'chime';
+}
+
+function findCustom(id) {
+  return customSounds.find(c => c.id === id);
+}
+
+/** 自定义铃声走 <audio> 循环；音量用 Web Audio 的 GainNode 控制（iOS 上 element.volume 无效） */
+function playCustomLoop(item) {
+  const ctx = ensureCtx();
+  if (!customAudioEl) {
+    customAudioEl = new Audio();
+    customAudioEl.loop = true;
+    customAudioEl.preload = 'auto';
+  }
+  if (ctx && !mediaSource) {
+    try {
+      mediaSource = ctx.createMediaElementSource(customAudioEl);
+      mediaGain = ctx.createGain();
+      mediaSource.connect(mediaGain);
+      mediaGain.connect(ctx.destination);
+    } catch (e) {
+      mediaSource = null;
+      mediaGain = null;
+    }
+  }
+  const vol = Math.min(1, state.settings.volume * rampFactor());
+  try {
+    customAudioEl.src = item.url;
+    customAudioEl.volume = mediaGain ? 1 : vol;
+    if (mediaGain) mediaGain.gain.value = vol;
+    customAudioEl.play().catch(() => {});
+  } catch (e) { /* ignore */ }
+
+  if (customTimer) clearInterval(customTimer);
+  customTimer = setInterval(() => {
+    const v = Math.min(1, state.settings.volume * rampFactor());
+    try {
+      if (mediaGain) mediaGain.gain.value = v;
+      else if (customAudioEl) customAudioEl.volume = v;
+    } catch (e) {}
+  }, 500);
+}
+
+function stopCustomAudio() {
+  if (customTimer) { clearInterval(customTimer); customTimer = null; }
+  if (customAudioEl) {
+    try { customAudioEl.pause(); customAudioEl.currentTime = 0; } catch (e) {}
+  }
+}
+
+function startSoundLoop() {
+  stopSoundLoop();
+  const sel = currentSoundId();
+  if (sel.indexOf('custom:') === 0) {
+    const item = findCustom(sel.slice(7));
+    if (item) { playCustomLoop(item); return; }
+  }
+  const id = BUILTIN_SOUNDS.some(s => s.id === sel) ? sel : 'chime';
+  playBuiltin(id, state.settings.volume);
+  soundTimer = setInterval(() => playBuiltin(id, state.settings.volume), 2600);
+}
+
+function stopSoundLoop() {
+  if (soundTimer) { clearInterval(soundTimer); soundTimer = null; }
+  stopCustomAudio();
+}
+
+/** 试听：响一遍就停，不循环 */
+function previewSound(id) {
+  stopPreview();
+  if (id.indexOf('custom:') === 0) {
+    const item = findCustom(id.slice(7));
+    if (!item) { toast('找不到这个铃声'); return; }
+    previewEl = new Audio(item.url);
+    previewEl.volume = Math.min(1, state.settings.volume);
+    previewEl.play().catch(() => {});
+    return;
+  }
+  playBuiltin(id, state.settings.volume);
+}
+
+function stopPreview() {
+  if (previewEl) {
+    try { previewEl.pause(); } catch (e) {}
+    previewEl = null;
+  }
+}
+
+/* 自定义铃声存在 IndexedDB 里（localStorage 装不下音频） */
+const SOUND_DB = 'shift-alarm-audio';
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) return reject(new Error('no-idb'));
+    const req = indexedDB.open(SOUND_DB, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains('sounds')) req.result.createObjectStore('sounds', { keyPath: 'id' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function putSound(rec) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('sounds', 'readwrite');
+    tx.objectStore('sounds').put(rec);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function removeSound(id) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('sounds', 'readwrite');
+    tx.objectStore('sounds').delete(id);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadCustomSounds() {
+  try {
+    const db = await idbOpen();
+    const all = await new Promise((resolve, reject) => {
+      const tx = db.transaction('sounds', 'readonly');
+      const req = tx.objectStore('sounds').getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+    customSounds = all.map(r => ({
+      id: r.id,
+      name: r.name,
+      size: r.size || 0,
+      url: URL.createObjectURL(r.blob)
+    }));
+    const sel = currentSoundId();
+    if (sel.indexOf('custom:') === 0 && !findCustom(sel.slice(7))) {
+      state.settings.sound = 'chime';
+      save();
+    }
+    if (view.sheet === 'settings') renderSheet();
+  } catch (e) { /* 没有 IndexedDB 就用内置铃声 */ }
+}
+
+function fmtSize(n) {
+  if (!n) return '';
+  if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+async function onSoundFile(file) {
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { toast('文件太大，请控制在 8MB 以内'); return; }
+  const name = (file.name || '我的铃声').replace(/\.[^.]+$/, '').slice(0, 16) || '我的铃声';
+  const rec = { id: uid(), name, size: file.size, blob: file };
+  try {
+    await putSound(rec);
+  } catch (e) {
+    toast('这个浏览器存不了音频文件');
+    return;
+  }
+  customSounds.push({ id: rec.id, name, size: rec.size, url: URL.createObjectURL(file) });
+  state.settings.sound = 'custom:' + rec.id;
+  save();
+  rerenderSheet();
+  previewSound('custom:' + rec.id);
+  toast('已设为铃声：' + name);
+}
+
+async function deleteCustomSound(id) {
+  const item = findCustom(id);
+  if (!item) return;
+  try { await removeSound(id); } catch (e) {}
+  try { URL.revokeObjectURL(item.url); } catch (e) {}
+  customSounds = customSounds.filter(c => c.id !== id);
+  if (currentSoundId() === 'custom:' + id) {
+    state.settings.sound = 'chime';
+    save();
+  }
+  rerenderSheet();
+  toast('已删除「' + item.name + '」');
+}
+
+/* ---------------- 晨间播报 ---------------- */
+const WMO = {
+  0: '晴', 1: '晴间多云', 2: '多云', 3: '阴', 45: '有雾', 48: '有雾',
+  51: '小雨', 53: '小雨', 55: '中雨', 56: '冻雨', 57: '冻雨',
+  61: '小雨', 63: '中雨', 65: '大雨', 66: '冻雨', 67: '冻雨',
+  71: '小雪', 73: '中雪', 75: '大雪', 77: '雪粒',
+  80: '阵雨', 81: '阵雨', 82: '强阵雨', 85: '阵雪', 86: '阵雪',
+  95: '雷阵雨', 96: '雷阵雨伴冰雹', 99: '雷暴'
+};
+
+let weatherCache = { key: '', text: '', at: 0 };
+
+function fetchWithTimeout(url, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms || 6000);
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
+async function geocodeCity(name) {
+  const b = state.settings.brief;
+  b.city = (name || '').trim();
+  if (!b.city) {
+    b.lat = null; b.lon = null; b.place = '';
+    save();
+    return;
+  }
+  try {
+    const r = await fetchWithTimeout('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + encodeURIComponent(b.city));
+    const j = await r.json();
+    const hit = j && j.results && j.results[0];
+    if (!hit) { toast('没找到「' + b.city + '」，换个写法试试'); return; }
+    b.lat = hit.latitude;
+    b.lon = hit.longitude;
+    b.place = hit.name + (hit.admin1 && hit.admin1 !== hit.name ? '·' + hit.admin1 : '');
+    save();
+    toast('天气城市：' + b.place);
+    rerenderSheet();
+  } catch (e) {
+    toast('连不上天气服务，稍后再试');
+  }
+}
+
+async function getWeatherText() {
+  const b = state.settings.brief;
+  if (b.lat == null || b.lon == null) return '';
+  const key = b.lat + ',' + b.lon + ',' + new Date().toDateString();
+  if (weatherCache.key === key && Date.now() - weatherCache.at < 3600e3) return weatherCache.text;
+  try {
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + b.lat + '&longitude=' + b.lon
+      + '&current=temperature_2m,weather_code'
+      + '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max'
+      + '&timezone=auto&forecast_days=1';
+    const r = await fetchWithTimeout(url, 5000);
+    const j = await r.json();
+    const cur = j.current || {};
+    const d = j.daily || {};
+    const desc = WMO[cur.weather_code] || '多云';
+    const hi = Math.round(((d.temperature_2m_max || [])[0] ?? cur.temperature_2m) || 0);
+    const lo = Math.round(((d.temperature_2m_min || [])[0] ?? cur.temperature_2m) || 0);
+    const pop = ((d.precipitation_probability_max || [])[0]);
+    const place = (b.place || b.city || '你那边').split('·')[0];
+    const t = Math.round(cur.temperature_2m);
+    let s = place + '现在' + desc + '，' + t + ' 度，今天 ' + lo + ' 到 ' + hi + ' 度';
+    if (pop != null && pop >= 30) s += '，降水概率 ' + pop + '%';
+    weatherCache = { key, text: s + '。', at: Date.now() };
+    return weatherCache.text;
+  } catch (e) {
+    return '';
+  }
+}
+
+async function getNewsLines() {
+  const b = state.settings.brief;
+  if (!b.rss) return [];
+  try {
+    const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(b.rss);
+    const r = await fetchWithTimeout(url, 7000);
+    const text = await r.text();
+    const doc = new DOMParser().parseFromString(text, 'text/xml');
+    const items = [...doc.querySelectorAll('item > title, entry > title')].slice(0, 3);
+    return items
+      .map(n => (n.textContent || '').trim().replace(/<[^>]+>/g, ''))
+      .filter(Boolean)
+      .map(s => s.length > 34 ? s.slice(0, 34) + '…' : s);
+  } catch (e) {
+    return [];
+  }
+}
+
+async function buildBrief() {
+  const b = state.settings.brief;
+  const now = new Date();
+  const parts = [];
+  parts.push('早上好，现在是 ' + now.getHours() + ' 点' + (now.getMinutes() ? ' ' + now.getMinutes() + ' 分' : '') + '。');
+  parts.push('今天是 ' + (now.getMonth() + 1) + ' 月 ' + now.getDate() + ' 日 ' + WEEK[now.getDay()] + '。');
+  if (b.shift) {
+    const names = state.groups.filter(g => g.enabled && isActiveOn(g, now)).map(g => g.name);
+    if (names.length) parts.push('今天的班次是' + names.join('、') + '。');
+  }
+  if (b.weather) {
+    const w = await getWeatherText();
+    if (w) parts.push(w);
+  }
+  if (b.note) parts.push(b.note.replace(/[。.!！]+$/, '') + '。');
+  if (b.news) {
+    const lines = await getNewsLines();
+    if (lines.length) parts.push('头条：' + lines.join('；') + '。');
+  }
+  parts.push('祝你今天顺利。');
+  return parts.join('');
+}
+
+function speak(text) {
+  if (!text || !('speechSynthesis' in window)) return false;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.rate = 1;
+    u.pitch = 1;
+    speechSynthesis.speak(u);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function prepareRingBrief() {
+  if (!state.settings.brief.on) return;
+  try {
+    const text = await buildBrief();
+    if (!text || !ringing || $('#ring').hidden) return;
+    ringing.brief = text;
+    const box = $('#ring-brief');
+    const el = $('#ring-brief-text');
+    if (box && el) { el.textContent = text; box.hidden = false; }
+  } catch (e) { /* 播报失败不影响闹钟 */ }
+}
+
+async function testBrief() {
+  toast('正在准备播报…');
+  const text = await buildBrief();
+  const ok = speak(text);
+  if (!ok) toast('这个浏览器不支持语音朗读');
+}
+
+function startVibration() {
+  stopVibration();
+  if (!state.settings.vibrate || !navigator.vibrate) return;
+  const pattern = [500, 260, 500, 260];
+  navigator.vibrate(pattern);
+  vibTimer = setInterval(() => navigator.vibrate(pattern), 2600);
+}
+
+function stopVibration() {
+  if (vibTimer) { clearInterval(vibTimer); vibTimer = null; }
+  if (navigator.vibrate) { try { navigator.vibrate(0); } catch (e) {} }
+}
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen');
+  } catch (e) { /* ignore */ }
+}
+
+function releaseWakeLock() {
+  try { if (wakeLock) wakeLock.release(); } catch (e) {}
+  wakeLock = null;
+}
+
+/** 守夜模式或正在响铃时，屏幕要保持常亮 */
+function syncWakeLock() {
+  if (nightOn || ringing) requestWakeLock();
+  else releaseWakeLock();
+}
+
+function triggerRing({ groupName, color, labels, snooze = 5, test = false }) {
+  if (ringing) return;
+  ringing = { groupName, color, labels, snooze };
+  ringStart = Date.now();
+  const now = new Date();
+  const ring = $('#ring');
+  ring.style.setProperty('--accent', color || '#ff8a3d');
+  ring.hidden = false;
+  ring.innerHTML = `
+    <div class="ring-pulse"></div>
+    <div class="ring-kicker">${test ? '试听' : '闹钟响了'}</div>
+    <div class="ring-time">${hm(now)}</div>
+    <div class="ring-group">${esc(groupName)}</div>
+    <div class="ring-labels">${labels.map(esc).join(' · ')}</div>
+    <div class="brief" id="ring-brief" hidden>
+      <div class="brief-kicker">今日播报</div>
+      <div class="brief-text" id="ring-brief-text"></div>
+      <button class="brief-play" data-action="speak-brief">🔊 再读一遍</button>
+    </div>
+    <div class="ring-actions">
+      <button class="btn ghost" data-action="ring-snooze">小睡 ${snooze} 分钟</button>
+      <button class="btn primary" data-action="ring-stop">${test ? '好，知道了' : '起床，关掉'}</button>
+    </div>`;
+  document.body.classList.add('locked');
+  startSoundLoop();
+  startVibration();
+  syncWakeLock();
+  prepareRingBrief();
+
+  if (!test && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(groupName + ' · ' + hm(now), {
+        body: labels.join(' · '),
+        tag: 'shift-alarm-' + now.getTime(),
+        requireInteraction: true
+      });
+    } catch (e) {}
+  }
+}
+
+function stopRing() {
+  const briefText = ringing && ringing.brief;
+  stopSoundLoop();
+  stopVibration();
+  ringing = null;
+  ringStart = 0;
+  const ring = $('#ring');
+  ring.hidden = true;
+  ring.innerHTML = '';
+  if (!nightOn) document.body.classList.remove('locked');
+  syncWakeLock();
+  if (briefText) setTimeout(() => speak(briefText), 450);
+}
+
+function snoozeRing() {
+  if (!ringing) return;
+  const min = ringing.snooze || 5;
+  state.snoozed.push({
+    at: Date.now() + min * 60000,
+    groupName: ringing.groupName,
+    color: ringing.color,
+    labels: ringing.labels
+  });
+  save();
+  const name = ringing.groupName;
+  stopRing();
+  toast('已小睡 ' + min + ' 分钟');
+  renderHome();
+}
+
+/* =========================================================
+   检测到点 & 主循环
+   ========================================================= */
+function maybeFire(now) {
+  const nowMs = now.getTime();
+  const stamp = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const due = [];
+
+  // 允许 90 秒的容差：后台标签页的定时器会被浏览器降频，晚一点也能补响
+  const LATE = 90 * 1000;
+
+  for (const g of state.groups) {
+    if (!g.enabled) continue;
+    if (!isActiveOn(g, now)) continue;
+    for (const a of g.alarms) {
+      if (!a.enabled) continue;
+      const [h, mi] = a.time.split(':').map(Number);
+      const delta = nowMs - (midnight + (h * 60 + mi) * 60000);
+      if (delta < 0 || delta > LATE) continue;
+      const k = stamp + '|' + g.id + '|' + a.id + '|' + a.time;
+      if (firedKeys.has(k)) continue;
+      firedKeys.add(k);
+      due.push({ g, a });
+    }
+  }
+
+  // 小睡到点的
+  const woke = state.snoozed.filter(s => s.at <= nowMs && nowMs - s.at < 3 * 60000);
+  if (woke.length) {
+    state.snoozed = state.snoozed.filter(s => !woke.includes(s));
+    save();
+  }
+
+  if (firedKeys.size > 800) firedKeys.clear();
+
+  if (ringing) return;
+
+  if (due.length) {
+    const first = due[0].g;
+    triggerRing({
+      groupName: first.name,
+      color: first.color,
+      labels: due.map(d => d.a.label || d.a.time),
+      snooze: first.snooze
+    });
+  } else if (woke.length) {
+    const s = woke[0];
+    triggerRing({ groupName: s.groupName, color: s.color, labels: s.labels, snooze: 5 });
+  }
+}
+
+function tick() {
+  const now = new Date();
+  updateClock(now);
+  updateNight();
+  maybeFire(now);
+}
+
+/* =========================================================
+   启动
+   ========================================================= */
+(function init() {
+  renderHome();
+  updateClock(new Date());
+  tick();
+  setInterval(tick, 500);
+  setInterval(updateNextUp, 20000);
+  loadCustomSounds();
+
+  document.addEventListener('pointerdown', function unlock() {
+    primeAudio();
+    if (audioCtx && audioCtx.state === 'running') {
+      document.removeEventListener('pointerdown', unlock);
+    }
+  }, { passive: true });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      tick();
+      syncWakeLock();
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (nightOn) exitNight();
+    else if (view.sheet) closeSheet();
+  });
+
+  // 离线缓存 / 可安装
+  if ('serviceWorker' in navigator
+    && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  // iPhone 添加到主屏幕的引导（只提示一次）
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let tipSeen = false;
+  try { tipSeen = localStorage.getItem('ios-tip-dismissed') === '1'; } catch (e) {}
+  if (isIOS && !standalone && !tipSeen) {
+    setTimeout(() => { const tip = $('#ios-tip'); if (tip) tip.hidden = false; }, 900);
+  }
+
+  // 演示参数：?demo=group / ?demo=ring / ?demo=settings / ?demo=night / ?demo=tip
+  const demo = new URLSearchParams(location.search).get('demo');
+  if (demo === 'group' && state.groups[0]) openGroup(state.groups[0].id);
+  if (demo === 'settings') openSettings();
+  if (demo === 'night') enterNight();
+  if (demo === 'tip') { const tip = $('#ios-tip'); if (tip) tip.hidden = false; }
+  if (demo === 'ring') {
+    setTimeout(() => triggerRing({ groupName: '早班', color: '#ff8a3d', labels: ['起床', '出门'], snooze: 5, test: true }), 200);
+  }
+})();
+</script>
+</body>
+</html>
